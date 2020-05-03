@@ -13,9 +13,12 @@ spriteHeight equ 9
     SEG.U Variables
     org $80
 
-YPos    .byte
-XPos    .byte
-YPosp2  .byte
+YPos        .byte
+XPos        .byte
+YPosp2      .byte
+MissileOn   .byte
+MissileYpos .byte
+MissileXpos .byte
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;code
@@ -27,7 +30,7 @@ YPosp2  .byte
 START:
     CLEAN_START
 
-    lda #140
+    lda #30
     sta YPos
 
     lda #0
@@ -36,10 +39,12 @@ START:
     lda #140
     sta YPosp2
 
+    lda #$8
+    sta COLUBK
+
 NextFrame:
     lsr SWCHB	; test Game Reset switch
     bcc START	; reset?
-; 1 + 3 lines of VSYNC
     VERTICAL_SYNC
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -49,21 +54,37 @@ NextFrame:
     lda XPos 
     ldx #0 
     jsr SetHorizPos
+    lda MissileXpos 
+    ldx #2 
+    jsr SetHorizPos
     sta WSYNC
     sta HMOVE	; gotta apply HMOVE
+
+    sta CXCLR ; clear collisions
+    
+
     TIMER_WAIT
 
     lda #0
 	sta VBLANK
+.VisibleFrame    
+    
+    
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;  192 scan lines
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    ldx #192
+    ldx #95
 LVScan
-    STA WSYNC
-
+    lda #0
+    cpx MissileYpos
+    bne skipMissileDraw
+    inc MissileYpos
+    lda #%00000010
+skipMissileDraw
+    sta ENAM0
+    
     TXA         ;x -> a
     SEC         ;set carry
     SBC YPos    ; a - YPos
@@ -74,6 +95,7 @@ LVScan
 InSpriteP1    
     TAY
     LDA Frame0,y
+    STA WSYNC
     STA GRP0
     LDA ColorFrame0,y
     STA COLUP0
@@ -89,6 +111,7 @@ InSpriteP1
 InSpriteP2    
     TAY
     LDA PinkOWLF0,y
+    STA WSYNC
     STA GRP1
     LDA PinkOwlCF0,y
     STA COLUP1
@@ -108,7 +131,21 @@ InSpriteP2
     sta VBLANK
     jsr MoveJoystick
     dec YPosp2
-    dec YPosp2
+
+CheckCollisionM0P1:
+    lda #%10000000           ; CXP0FB bit 7 detects P0 and PF collision
+    bit CXM0P                 ; check CXM0P register bit 7
+    bne .CollisionM0P1       ; collision P0 with playfield happened
+    jmp EndCollisionCheck
+.CollisionM0P1:
+    lda #32
+    sta COLUBK
+    lda #0
+    sta MissileYpos          ; and we also reset missile position
+
+EndCollisionCheck:
+    sta CXCLR                ; clear all collision flags before next frame
+
     TIMER_WAIT
     jmp NextFrame
 
@@ -157,7 +194,7 @@ SkipMoveUp
 	lda #%00010000	;Down?
 	bit SWCHA 
 	bne SkipMoveDown
-    cpx #181
+    cpx #80
     bcs SkipMoveDown
     inx
 SkipMoveDown
@@ -179,6 +216,17 @@ SkipMoveLeft
     inx
 SkipMoveRight
 	stx XPos
+	bit INPT4 
+	bmi SkipButton
+    lda #45
+    lda YPos
+    adc #8
+    sta MissileYpos
+    lda XPos
+    adc #5
+    sta MissileXpos
+    
+SkipButton
 	rts
 
 ;---Graphics Data from PlayerPal 2600---

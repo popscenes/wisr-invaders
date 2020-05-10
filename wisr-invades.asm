@@ -13,12 +13,33 @@ spriteHeight equ 9
     SEG.U Variables
     org $80
 
-YPos        .byte
+YRowPos0        .byte ;$80
+YRowPos1        .byte ;$81
+YRowPos3        .byte ;$82
+YRowPos4        .byte ;$83
+
+RowState0        .byte ;$84
+RowState1        .byte ;$85
+RowState2        .byte ;$86
+RowState         .byte ;$87
+
+xRowBase0	.byte
+xRowBase1	.byte
+xRowBase2	.byte
+xRowBase3	.byte
+
 XPos        .byte
-YPosp2      .byte
-MissileOn   .byte
+YPos        .byte
+
 MissileYpos .byte
 MissileXpos .byte
+
+Missile1Ypos .byte
+Missile1Xpos .byte
+
+OwlRowMask  .byte
+currentRow  .byte
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;code
@@ -28,19 +49,41 @@ MissileXpos .byte
     ORG $f000
 
 START:
-    CLEAN_START
-
-    lda #30
-    sta YPos
-
-    lda #0
-    sta XPos
+    CLEAN_START    
+    
+    lda #120
+    sta YRowPos0
     
     lda #140
-    sta YPosp2
+    sta YRowPos0+1
+
+    lda #160
+    sta YRowPos0+2
+
+    lda #180
+    sta YRowPos0+3
 
     lda #$8
     sta COLUBK
+    
+    lda #0
+    sta currentRow
+    sta MissileXpos
+    
+    lda #10
+    sta xRowBase0
+    
+    lda #20
+    sta xRowBase1
+    
+    lda #30
+    sta xRowBase2
+    
+    lda #40
+    sta xRowBase3
+    
+    lda #30
+    sta YPos
 
 NextFrame:
     lsr SWCHB	; test Game Reset switch
@@ -51,22 +94,19 @@ NextFrame:
 ;  VBLANK
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     TIMER_SETUP 37
-    lda XPos 
-    ldx #0 
-    jsr SetHorizPos
-    lda MissileXpos 
-    ldx #2 
-    jsr SetHorizPos
-    sta WSYNC
-    sta HMOVE	; gotta apply HMOVE
-
+    
     sta CXCLR ; clear collisions
     
+    lda #3
+    sta currentRow
+    jsr MoveMissiles
+    
+
 
     TIMER_WAIT
 
     lda #0
-	sta VBLANK
+    sta VBLANK
 .VisibleFrame    
     
     
@@ -75,49 +115,116 @@ NextFrame:
 ;  192 scan lines
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    ldx #95
-LVScan
-    lda #0
-    cpx MissileYpos
-    bne skipMissileDraw
-    inc MissileYpos
-    lda #%00000010
-skipMissileDraw
-    sta ENAM0
-    
-    TXA         ;x -> a
-    SEC         ;set carry
-    SBC YPos    ; a - YPos
-    cmp #spriteHeight
-    BCC InSpriteP1
-    LDA #0
 
-InSpriteP1    
-    TAY
-    LDA Frame0,y
-    STA WSYNC
-    STA GRP0
-    LDA ColorFrame0,y
-    STA COLUP0
+
+		
+    TIMER_SETUP 192
+                                    ; clocks
+VisibleScanlines
+waitForRow
+    jsr DrawMissiles
+    ldx currentRow                  ; 3
+    lda YRowPos0,x                  ; 4
+    cmp INTIM                       ; 4
+    bcc waitForRow                  ; 2
+    
+SetUpRow
+    lda #3		; two copies, close for NUSIZ
+    sta NUSIZ0
+    sta NUSIZ1
     
     
-    TXA                     ; load current scanline(x) -> a
-    SEC                     ; set carry
-    SBC YPosp2              ; a =  a - YPos
-    cmp #spriteHeight       ; if a < spriteHeight cary flag cleared draw sprite line
-    BCC InSpriteP2
-    LDA #0
     
+    lda xRowBase0 ,x
+    ldx #0
+    jsr SetHorizPos
+    lda #100
+    ldx #1
+    jsr SetHorizPos
+    
+    ;ta WSYNC
+    ;ta HMOVE	; gotta apply HMOVE
+    
+    lda MissileXpos
+    ldx #4
+    jsr SetHorizPos
+    sta WSYNC
+    sta HMOVE	; gotta apply HMOVE
+
+	;lda #0
+        ;sta ENABL
+    
+    ldy 9     
 InSpriteP2    
-    TAY
-    LDA PinkOWLF0,y
-    STA WSYNC
-    STA GRP1
-    LDA PinkOwlCF0,y
-    STA COLUP1
+
+	
+    LDA PinkOWLF0,y                 ; 4
+    STA GRP1                        ; 3
+    STA GRP0                        ; 3
+    LDA PinkOwlCF0,y                ; 4
+    STA COLUP0                      ; 3
+    STA COLUP1                      ; 3
+    STA WSYNC                       ;3
+
+
+    dey                             ; 2
+    bne InSpriteP2                  ; 2 ;Total - 27 clocks;
     
-    DEX
-    bne LVScan
+    lda #0                          ; 2
+    STA COLUP0                      ; 3
+    STA COLUP1                      ; 3
+    STA GRP1                        ; 3
+    STA GRP0                        ; 3
+    dec currentRow                  ; 5
+    bpl waitForRow                  ; 2
+    
+    
+    lda #0		
+    sta NUSIZ0
+    sta NUSIZ1
+    
+    lda MissileXpos
+    ldx #4
+    jsr SetHorizPos
+    sta WSYNC
+    sta HMOVE	; gotta apply HMOVE
+    
+waitForPlayer    
+    jsr DrawMissiles
+    lda #30
+    cmp INTIM
+    bcc waitForPlayer
+    
+    
+    
+    
+SetUpPlayer
+    lda XPos 
+    ldx #0
+    jsr SetHorizPos
+    sta WSYNC
+    sta HMOVE	; gotta apply HMOVE
+
+    ldy 9     
+InSpriteP1    
+    LDA Frame0,y                 ; 4
+    STA GRP0                     ; 3
+    LDA ColorFrame0,y            ; 4
+    STA COLUP0                   ; 3
+    STA WSYNC
+    ldx #0
+    
+    dey                             ; 2
+    bne InSpriteP1                  ; 2 ;Total - 27 clocks;
+    lda #0                          ; 2
+    STA COLUP0                      ; 3
+    STA COLUP1                      ; 3
+    STA GRP1                        ; 3
+    STA GRP0
+    
+
+   TIMER_WAIT 
+   
 
     
     
@@ -130,12 +237,16 @@ InSpriteP2
 	lda #2
     sta VBLANK
     jsr MoveJoystick
-    dec YPosp2
 
 CheckCollisionM0P1:
-    lda #%10000000           ; CXP0FB bit 7 detects P0 and PF collision
-    bit CXM0P                 ; check CXM0P register bit 7
+    lda #%01000000           ; CXP0FB bit 7 detects P0 and PF collision
+    bit CXP0FB                 ; check CXM0P register bit 7
     bne .CollisionM0P1       ; collision P0 with playfield happened
+    
+    lda #%01000000           ; CXP0FB bit 7 detects P0 and PF collision
+    bit CXP1FB                 ; check CXM0P register bit 7
+    bne .CollisionM0P1       ; collision P0 with playfield happened
+    
     jmp EndCollisionCheck
 .CollisionM0P1:
     lda #32
@@ -152,7 +263,7 @@ EndCollisionCheck:
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; SetHorizPos - setHorizontal position of an object
-; A register desired C-coordinate of teh object
+; A register desired x-coordinate of the object
 ; X register contains the index of the desired object:
 ;
 ; X=0: player 0
@@ -162,7 +273,6 @@ EndCollisionCheck:
 ; X=4: ball
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 SetHorizPos
 	sta WSYNC	; start a new line
     bit 0		; waste 3 cycles
@@ -180,31 +290,48 @@ DivideLoop
 	rts		; return to caller
 
 
+DrawMissiles
+	    lda INTIM	; load timer value
+        pha
+        sec
+        sbc MissileYpos 
+        cmp #8		; within 8 lines of missile?
+        lda #3		; bit 1 now set
+        adc #0		; if carry set, bit 1 cleared
+        sta ENABL	; enable/disable ball
+	pla
+        sec
+        sbc Missile1Ypos
+        cmp #8		; within 8 lines of missile?
+        lda #3		; bit 1 now set
+        adc #0		; if carry set, bit 1 cleared
+        sta ENAM1	; enable/disable missile
+        rts
+
+
+MoveMissiles
+    lda MissileYpos
+    beq NoMoveMiss0
+    inc MissileYpos
+NoMoveMiss0
+    lda Missile1Ypos
+    beq NoMoveMiss1
+    dec Missile1Ypos
+NoMoveMiss1
+	rts
+
+
+
+
+
 MoveJoystick
-; Move vertically
-; (up and down are actually reversed since ypos starts at bottom)
-	ldx YPos
-	lda #%00100000	;Up?
-	bit SWCHA
-	bne SkipMoveUp
-    cpx #9
-    bcc SkipMoveUp
-    dex
-SkipMoveUp
-	lda #%00010000	;Down?
-	bit SWCHA 
-	bne SkipMoveDown
-    cpx #80
-    bcs SkipMoveDown
-    inx
-SkipMoveDown
-	stx YPos
+
 ; Move horizontally
     ldx XPos
 	lda #%01000000	;Left?
 	bit SWCHA
 	bne SkipMoveLeft
-    cpx #1
+    cpx #30
     bcc SkipMoveLeft
     dex
 SkipMoveLeft
@@ -215,16 +342,16 @@ SkipMoveLeft
     bcs SkipMoveRight
     inx
 SkipMoveRight
-	stx XPos
-	bit INPT4 
-	bmi SkipButton
-    lda #45
+  stx XPos
+  bit INPT4 
+  bmi SkipButton
     lda YPos
     adc #8
     sta MissileYpos
     lda XPos
     adc #5
     sta MissileXpos
+    
     
 SkipButton
 	rts

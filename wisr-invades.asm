@@ -21,7 +21,7 @@ YRowPos4        .byte ;$83
 RowState0        .byte ;$84
 RowState1        .byte ;$85
 RowState2        .byte ;$86
-RowState         .byte ;$87
+RowState4        .byte ;$87
 
 xRowBase0	.byte
 xRowBase1	.byte
@@ -33,6 +33,9 @@ xP1RowBase1	.byte
 xP1RowBase2	.byte
 xP1RowBase3	.byte
 
+xposRowCalc	    .byte
+xposP1RowCalc	.byte
+
 XPos        .byte
 YPos        .byte
 
@@ -42,7 +45,6 @@ MissileXpos .byte
 Missile1Ypos .byte
 Missile1Xpos .byte
 
-OwlRowMask  .byte
 currentRow  .byte
 
 
@@ -75,33 +77,28 @@ START:
     sta currentRow
     sta MissileXpos
     
-    lda #10
+    lda #36
     sta xRowBase0
-    
-    lda #10
     sta xRowBase1
-    
-    lda #10
     sta xRowBase2
-    
-    lda #10
     sta xRowBase3
 
 
-    lda #80
+    lda #84
     sta xP1RowBase0
-    
-    lda #80
     sta xP1RowBase1
-    
-    lda #80
     sta xP1RowBase2
-    
-    lda #80
     sta xP1RowBase3
     
-    lda #80
+    lda #84
     sta YPos
+
+    lda %00111111
+    sta RowState0
+    lda %00111111
+    sta RowState1
+    sta RowState2
+    sta RowState4 
 
 NextFrame:
     lsr SWCHB	; test Game Reset switch
@@ -158,7 +155,7 @@ SetUpRow
     lda RowXOffset,y
     clc
     ADC xRowBase0,x
-    sta xRowBase0,x
+    sta xposRowCalc
 
     lda RowState0,x
     LSR
@@ -173,13 +170,13 @@ SetUpRow
     lda RowXOffset,y
     clc
     ADC xP1RowBase0,x
-    sta xP1RowBase0,x
+    sta xposP1RowCalc
     
     
-    lda xRowBase0 ,x
+    lda xposRowCalc
     ldx #0
     jsr SetHorizPos
-    lda xP1RowBase0 ,x
+    lda xposP1RowCalc
     ldx #1
     jsr SetHorizPos
     
@@ -402,11 +399,11 @@ SkipButton
 RowXOffset
         .byte #0    ; Formation - 000
         .byte #0    ; Formation - 100
-        .byte #20   ; Formation - 010
+        .byte #15   ; Formation - 010
         .byte #0    ; Formation - 110
-        .byte #40   ; Formation - 001
-        .byte #20   ; Formation - 101
-        .byte #20   ; Formation - 011
+        .byte #32   ; Formation - 001
+        .byte #0    ; Formation - 101
+        .byte #16   ; Formation - 011
         .byte #0    ; Formation - 111
 
 RowXNUSIZ
@@ -415,7 +412,7 @@ RowXNUSIZ
         .byte #0    ; Formation - 010
         .byte #1    ; Formation - 110
         .byte #0    ; Formation - 001
-        .byte #4    ; Formation - 101
+        .byte #2    ; Formation - 101
         .byte #1    ; Formation - 011
         .byte #3    ; Formation - 111
 

@@ -28,6 +28,11 @@ xRowBase1	.byte
 xRowBase2	.byte
 xRowBase3	.byte
 
+xP1RowBase0	.byte
+xP1RowBase1	.byte
+xP1RowBase2	.byte
+xP1RowBase3	.byte
+
 XPos        .byte
 YPos        .byte
 
@@ -73,16 +78,29 @@ START:
     lda #10
     sta xRowBase0
     
-    lda #20
+    lda #10
     sta xRowBase1
     
-    lda #30
+    lda #10
     sta xRowBase2
     
-    lda #40
+    lda #10
     sta xRowBase3
+
+
+    lda #80
+    sta xP1RowBase0
     
-    lda #30
+    lda #80
+    sta xP1RowBase1
+    
+    lda #80
+    sta xP1RowBase2
+    
+    lda #80
+    sta xP1RowBase3
+    
+    lda #80
     sta YPos
 
 NextFrame:
@@ -129,16 +147,39 @@ waitForRow
     bcc waitForRow                  ; 2
     
 SetUpRow
-    lda #3		; two copies, close for NUSIZ
-    sta NUSIZ0
-    sta NUSIZ1
     
+    lda RowState0,x
+    and #%00000111
+    
+    tay
+    lda RowXNUSIZ,y
+    sta NUSIZ0 
+
+    lda RowXOffset,y
+    clc
+    ADC xRowBase0,x
+    sta xRowBase0,x
+
+    lda RowState0,x
+    LSR
+    LSR
+    LSR
+    and #%00000111
+    
+    tay
+    lda RowXNUSIZ,y
+    sta NUSIZ1 
+
+    lda RowXOffset,y
+    clc
+    ADC xP1RowBase0,x
+    sta xP1RowBase0,x
     
     
     lda xRowBase0 ,x
     ldx #0
     jsr SetHorizPos
-    lda #100
+    lda xP1RowBase0 ,x
     ldx #1
     jsr SetHorizPos
     
@@ -151,8 +192,8 @@ SetUpRow
     sta WSYNC
     sta HMOVE	; gotta apply HMOVE
 
-	;lda #0
-        ;sta ENABL
+    lda RowState0,x
+    BEQ skipSprite
     
     ldy 9     
 InSpriteP2    
@@ -169,7 +210,8 @@ InSpriteP2
 
     dey                             ; 2
     bne InSpriteP2                  ; 2 ;Total - 27 clocks;
-    
+
+skipSprite    
     lda #0                          ; 2
     STA COLUP0                      ; 3
     STA COLUP1                      ; 3
@@ -342,9 +384,9 @@ SkipMoveLeft
     bcs SkipMoveRight
     inx
 SkipMoveRight
-  stx XPos
-  bit INPT4 
-  bmi SkipButton
+    stx XPos
+    bit INPT4 
+    bmi SkipButton
     lda YPos
     adc #8
     sta MissileYpos
@@ -355,6 +397,27 @@ SkipMoveRight
     
 SkipButton
 	rts
+
+
+RowXOffset
+        .byte #0    ; Formation - 000
+        .byte #0    ; Formation - 100
+        .byte #20   ; Formation - 010
+        .byte #0    ; Formation - 110
+        .byte #40   ; Formation - 001
+        .byte #20   ; Formation - 101
+        .byte #20   ; Formation - 011
+        .byte #0    ; Formation - 111
+
+RowXNUSIZ
+        .byte #0    ; Formation - 000
+        .byte #0    ; Formation - 100
+        .byte #0    ; Formation - 010
+        .byte #1    ; Formation - 110
+        .byte #0    ; Formation - 001
+        .byte #4    ; Formation - 101
+        .byte #1    ; Formation - 011
+        .byte #3    ; Formation - 111
 
 ;---Graphics Data from PlayerPal 2600---
 Frame0

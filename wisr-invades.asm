@@ -33,7 +33,7 @@ xP1RowBase1	.byte
 xP1RowBase2	.byte
 xP1RowBase3	.byte
 
-xposRowCalc	    .byte
+xposRowCalc	.byte
 xposP1RowCalc	.byte
 
 XPos        .byte
@@ -46,6 +46,13 @@ Missile1Ypos .byte
 Missile1Xpos .byte
 
 currentRow  .byte
+missileRow  .byte
+missileColumn .byte
+
+P1SpritePtr .word
+P2SpritePtr .word
+
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -58,16 +65,16 @@ currentRow  .byte
 START:
     CLEAN_START    
     
-    lda #120
+    lda #110
     sta YRowPos0
     
     lda #140
     sta YRowPos0+1
 
-    lda #160
+    lda #170
     sta YRowPos0+2
 
-    lda #180
+    lda #200
     sta YRowPos0+3
 
     lda #$8
@@ -90,12 +97,11 @@ START:
     sta xP1RowBase2
     sta xP1RowBase3
     
-    lda #84
+    lda #30
     sta YPos
 
     lda %00111111
     sta RowState0
-    lda %00111111
     sta RowState1
     sta RowState2
     sta RowState4 
@@ -109,15 +115,24 @@ NextFrame:
 ;  VBLANK
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     TIMER_SETUP 37
-    
+     
     sta CXCLR ; clear collisions
     
     lda #3
     sta currentRow
     jsr MoveMissiles
+
+    lda #<PinkOWLF0
+    sta P1SpritePtr         ; lo-byte pointer for jet sprite lookup table
+    lda #>PinkOWLF0
+    sta P1SpritePtr+1       ; hi-byte pointer for jet sprite lookup table
+
+    lda #<PinkOWLF0
+    sta P2SpritePtr         ; lo-byte pointer for jet sprite lookup table
+    lda #>PinkOWLF0
+    sta P2SpritePtr+1       ; hi-byte pointer for jet sprite lookup table
+
     
-
-
     TIMER_WAIT
 
     lda #0
@@ -136,82 +151,30 @@ NextFrame:
     TIMER_SETUP 192
                                     ; clocks
 VisibleScanlines
-waitForRow
+waitForRow 
     jsr DrawMissiles
     ldx currentRow                  ; 3
     lda YRowPos0,x                  ; 4
     cmp INTIM                       ; 4
-    bcc waitForRow                  ; 2
+    bcc waitForRow                  ; 2        
     
-SetUpRow
+    jsr SetUpRow
+    ldy #9
     
-    lda RowState0,x
-    and #%00000111
-    
-    tay
-    lda RowXNUSIZ,y
-    sta NUSIZ0 
-
-    lda RowXOffset,y
-    clc
-    ADC xRowBase0,x
-    sta xposRowCalc
-
-    lda RowState0,x
-    LSR
-    LSR
-    LSR
-    and #%00000111
-    
-    tay
-    lda RowXNUSIZ,y
-    sta NUSIZ1 
-
-    lda RowXOffset,y
-    clc
-    ADC xP1RowBase0,x
-    sta xposP1RowCalc
-    
-    
-    lda xposRowCalc
-    ldx #0
-    jsr SetHorizPos
-    lda xposP1RowCalc
-    ldx #1
-    jsr SetHorizPos
-    
-    ;ta WSYNC
-    ;ta HMOVE	; gotta apply HMOVE
-    
-    lda MissileXpos
-    ldx #4
-    jsr SetHorizPos
-    sta WSYNC
-    sta HMOVE	; gotta apply HMOVE
-
-    lda RowState0,x
-    BEQ skipSprite
-    
-    ldy 9     
-InSpriteP2    
-
-	
-    LDA PinkOWLF0,y                 ; 4
-    STA GRP1                        ; 3
+InSpriteRow    	
+    jsr DrawMissiles
+    LDA (P1SpritePtr),Y             ; 4
     STA GRP0                        ; 3
+    LDA (P2SpritePtr)),y            ; 4
+    STA GRP1                        ; 3
     LDA PinkOwlCF0,y                ; 4
     STA COLUP0                      ; 3
     STA COLUP1                      ; 3
-    STA WSYNC                       ;3
-
-
+    STA WSYNC
     dey                             ; 2
-    bne InSpriteP2                  ; 2 ;Total - 27 clocks;
+    bne InSpriteRow                  ; 2 ;Total - 27 clocks;
 
-skipSprite    
     lda #0                          ; 2
-    STA COLUP0                      ; 3
-    STA COLUP1                      ; 3
     STA GRP1                        ; 3
     STA GRP0                        ; 3
     dec currentRow                  ; 5
@@ -221,12 +184,6 @@ skipSprite
     lda #0		
     sta NUSIZ0
     sta NUSIZ1
-    
-    lda MissileXpos
-    ldx #4
-    jsr SetHorizPos
-    sta WSYNC
-    sta HMOVE	; gotta apply HMOVE
     
 waitForPlayer    
     jsr DrawMissiles
@@ -287,9 +244,35 @@ CheckCollisionM0P1:
     bne .CollisionM0P1       ; collision P0 with playfield happened
     
     jmp EndCollisionCheck
+    
 .CollisionM0P1:
-    lda #32
-    sta COLUBK
+    ldx #0
+.findRow
+    lda YRowPos0,x
+    sbc #16             ;hit at bottom
+    SEC
+    sbc MissileYpos
+    Bpl .collisionOnRow
+    inx
+    jmp .findRow
+.collisionOnRow
+    stx missileRow
+    lda #%00000001
+    sta missileColumn
+    lda MissileXpos
+    Sbc xRowBase0,x
+columnLoop    
+    ASL missileColumn
+    sec
+    sbc #16		; subtract 15
+	bcs columnLoop	; branch until negative
+    
+    LSR missileColumn
+    
+    lda RowState0,x
+    EOR missileColumn
+    sta RowState0,x
+
     lda #0
     sta MissileYpos          ; and we also reset missile position
 
@@ -334,11 +317,12 @@ DrawMissiles
         pha
         sec
         sbc MissileYpos 
-        cmp #8		; within 8 lines of missile?
+        cmp #5		; within 5 lines of missile?
         lda #3		; bit 1 now set
         adc #0		; if carry set, bit 1 cleared
         sta ENABL	; enable/disable ball
-	pla
+.missile2
+        pla
         sec
         sbc Missile1Ypos
         cmp #8		; within 8 lines of missile?
@@ -359,7 +343,69 @@ NoMoveMiss0
 NoMoveMiss1
 	rts
 
+SetUpRow
+    lda #<PinkOWLF0
+    sta P1SpritePtr         ; lo-byte pointer for jet sprite lookup table
+    lda #>PinkOWLF0
+    sta P1SpritePtr+1       ; hi-byte pointer for jet sprite lookup table
 
+    lda #<PinkOWLF0
+    sta P2SpritePtr         ; lo-byte pointer for jet sprite lookup table
+    lda #>PinkOWLF0
+    sta P2SpritePtr+1       ; hi-byte pointer for jet sprite lookup table
+    
+    lda #0
+    sta ENABL	; enable/disable ball
+    lda RowState0,x
+    and #%00000111
+    BNE .skipEmptySpriteP1
+    lda #<EmptyFrame
+    sta P1SpritePtr         ; lo-byte pointer for jet sprite lookup table
+    lda #>EmptyFrame
+    sta P1SpritePtr+1       ; hi-byte pointer for jet sprite lookup table   
+.skipEmptySpriteP1   
+    tay
+    lda RowXNUSIZ,y
+    sta NUSIZ0 
+
+    lda RowXOffset,y
+    clc
+    ADC xRowBase0,x
+    sta xposRowCalc
+
+    lda RowState0,x
+    LSR
+    LSR
+    LSR
+    and #%00000111
+    BNE .skipEmptySpriteP2
+    lda #<EmptyFrame
+    sta P2SpritePtr         ; lo-byte pointer for jet sprite lookup table
+    lda #>EmptyFrame
+    sta P2SpritePtr+1       ; hi-byte pointer for jet sprite lookup table
+.skipEmptySpriteP2
+    tay
+    lda RowXNUSIZ,y
+    sta NUSIZ1 
+
+    lda RowXOffset,y
+    clc
+    ADC xP1RowBase0,x
+    sta xposP1RowCalc
+    lda xposRowCalc
+    ldx #0
+    jsr SetHorizPos
+    lda xposP1RowCalc
+    ldx #1
+    jsr SetHorizPos
+    
+    lda MissileXpos
+    ldx #4
+    jsr SetHorizPos
+
+    sta WSYNC
+    sta HMOVE	; gotta apply HMOVE
+    rts
 
 
 
@@ -438,6 +484,17 @@ Player2F0
         .byte #%00100100;$0E
         .byte #%00111100;$B6
         .byte #%01111110;$B6
+
+EmptyFrame
+        .byte 0
+        .byte 0
+        .byte 0
+        .byte 0
+        .byte 0
+        .byte 0
+        .byte 0
+        .byte 0
+        .byte 0
         
 PinkOWLF0
 	.byte 0

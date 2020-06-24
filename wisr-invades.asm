@@ -54,8 +54,9 @@ frameScore .byte
 
 P1SpritePtr .word
 P2SpritePtr .word
-
 random .byte
+
+EnemyDirection .byte
 
 
 ;scoring variables
@@ -107,6 +108,7 @@ START:
     sta currentRow
     sta MissileXpos
     sta Missile1Ypos
+    sta EnemyDirection
     
     lda #36
     sta xRowBase0
@@ -147,7 +149,7 @@ NextFrame:
     
     lda #3
     sta currentRow
-	JSR SetEnemyMissilePos
+    JSR SetEnemyMissilePos
     jsr MoveMissiles
     lda #<PinkOWLF0
     sta P1SpritePtr         ; lo-byte pointer for jet sprite lookup table
@@ -159,8 +161,67 @@ NextFrame:
     lda #>PinkOWLF0
     sta P2SpritePtr+1       ; hi-byte pointer for jet sprite lookup table
 
+SetEnemyDirection
+    lda xRowBase0
+    cmp #00
+    beq SetEnemyDirectionRight
+
+    lda xRowBase0
+    cmp #50
+    beq SetEnemyDirectionLeft
+    jmp CheckEnemyDirection
+
+SetEnemyDirectionLeft
+    lda #0
+    sta EnemyDirection
+    jmp CheckEnemyDirection
+SetEnemyDirectionRight
+    lda #1
+    sta EnemyDirection
     
+CheckEnemyDirection
+    lda EnemyDirection
+    BNE MoveEnemeyRight
+
+MoveEnemeyLeft
+    lda xRowBase0
+    SEC
+    SBC #1
+    STA xRowBase0
+    STA xRowBase1
+    STA xRowBase2
+    STA xRowBase3
+
+    lda xP1RowBase0
+    SEC
+    SBC #1
+    STA xP1RowBase0
+    STA xP1RowBase1
+    STA xP1RowBase2
+    STA xP1RowBase3
+    jmp FinishEnemyMove
+
+
+MoveEnemeyRight
+    lda xRowBase0
+    CLC
+    ADC #1
+    STA xRowBase0
+    STA xRowBase1
+    STA xRowBase2
+    STA xRowBase3
+
+    lda xP1RowBase0
+    CLC
+    ADC #1
+    STA xP1RowBase0
+    STA xP1RowBase1
+    STA xP1RowBase2
+    STA xP1RowBase3
+    jmp FinishEnemyMove
+
     
+FinishEnemyMove   
     lda #0
     sta frameScore
     
@@ -212,7 +273,7 @@ scoreboard
     jsr GetDigitPtrs	; get pointers
     jsr DrawDigits		; draw digits
         
-	lda #0
+    lda #0
     sta VDELP0
     sta VDELP1
     sta WSYNC
@@ -451,12 +512,12 @@ SetUpRow
     lda RowXOffset,y
     clc
     ADC xP1RowBase0,x
+    
     sta xposP1RowCalc
     lda xposRowCalc
     ldx #0
     jsr SetHorizPos
-    
-    
+
     lda xposP1RowCalc
     ldx #1
     jsr SetHorizPos

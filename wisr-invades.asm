@@ -58,6 +58,17 @@ random .byte
 
 EnemyDirection .byte
 
+TotalMoveFrames .byte
+CurrentMoveFrame .byte
+
+Ch0Volume .byte
+
+Ch1Volume   .byte
+Ch1Control  .byte
+Ch1Feq      .byte
+Ch1Duration .byte
+
+bkColour   .byte
 
 ;scoring variables
 
@@ -135,6 +146,20 @@ START:
     lda #$D4
     STA random
 
+    lda #48
+    sta TotalMoveFrames
+    sta CurrentMoveFrame
+    
+    lda #0
+    sta Ch0Volume
+    sta Ch1Volume
+    sta Ch1Control
+    sta Ch1Feq
+    sta Ch1Duration
+    
+    lda #00
+    sta bkColour
+
 NextFrame:
     lsr SWCHB	; test Game Reset switch
     bcc START	; reset?
@@ -151,6 +176,7 @@ NextFrame:
     sta currentRow
     JSR SetEnemyMissilePos
     jsr MoveMissiles
+    jsr PlayChanel1Sound
     lda #<PinkOWLF0
     sta P1SpritePtr         ; lo-byte pointer for jet sprite lookup table
     lda #>PinkOWLF0
@@ -161,13 +187,36 @@ NextFrame:
     lda #>PinkOWLF0
     sta P2SpritePtr+1       ; hi-byte pointer for jet sprite lookup table
 
-SetEnemyDirection
+    lda CurrentMoveFrame
+    beq MoveEvemy
+    SEC
+    SBC #1
+    sta CurrentMoveFrame
+    jmp FinishEnemyMove
+
+
+MoveEvemy
+    ldx #10
+    lda Ch0Volume
+    beq SetMoveSound
+    ldx #0
+SetMoveSound
+    stx Ch0Volume
+    stx AUDV0
+    lda #8
+    sta AUDC0
+    lda #15
+    sta AUDF0
+    
+    lda TotalMoveFrames
+    sta CurrentMoveFrame
+    
     lda xRowBase0
-    cmp #00
+    cmp #20
     beq SetEnemyDirectionRight
 
     lda xRowBase0
-    cmp #50
+    cmp #60
     beq SetEnemyDirectionLeft
     jmp CheckEnemyDirection
 
@@ -220,7 +269,6 @@ MoveEnemeyRight
     STA xP1RowBase3
     jmp FinishEnemyMove
 
-    
 FinishEnemyMove   
     lda #0
     sta frameScore
@@ -254,6 +302,9 @@ FinishEnemyMove
 
     lda #$b2
     sta COLUPF
+    
+    lda bkColour
+    sta COLUBK
 
     TIMER_WAIT
 
@@ -345,6 +396,9 @@ InSpriteP1
     dey                             ; 2
     bne InSpriteP1                  ; 2 ;Total - 27 clocks;
     
+    lda #$20
+    sta COLUBK
+    
     lda #0                          ; 2
     STA COLUP0                      ; 3
     STA COLUP1                      ; 3
@@ -381,7 +435,23 @@ CheckCollisionM0P1:
     jmp EnemyMissileCollisionCheck
     
 .PlayerMissileHitEnemy:
+    lda #15
+    sta Ch1Volume
+    lda #8
+    sta Ch1Control
+    lda #31
+    sta Ch1Feq
+    lda #60
+    sta Ch1Duration 
+    
+    
+    lda TotalMoveFrames
+    beq .setframescore
+    SEC
+    SBC #4
+    sta TotalMoveFrames
     lda #10
+.setframescore
     sta frameScore
     ldx #0
 
@@ -422,7 +492,7 @@ EnemyMissileCollisionCheck
 
 .EnemyMissileHitPlayer
     lda #$30
-    sta COLUBK
+    sta bkColour
 
 EndCollisionCheck:
     ;sta CXCLR                ; clear all collision flags before next frame
@@ -562,7 +632,16 @@ SkipMoveRight
     sta MissileYpos
     lda XPos
     adc #5
-    sta MissileXpos  
+    sta MissileXpos
+
+    lda #10
+    sta Ch1Volume
+    lda #1
+    sta Ch1Control
+    lda #20
+    sta Ch1Feq
+    lda #60
+    sta Ch1Duration  
 SkipButton
 	rts
 
@@ -635,6 +714,35 @@ DrawMissiles
     adc #0		; if carry set, bit 1 cleared
     sta ENAM1	; enable/disable missile
     rts
+
+PlayChanel1Sound
+    lda Ch1Duration
+    beq SoundFinished
+
+    lda Ch1Volume
+    sta AUDV1
+    lda Ch1Control
+    sta AUDC1
+    lda Ch1Duration
+    sta AUDF1
+
+    SEC
+    lda Ch1Duration
+    SBC #1
+    sta Ch1Duration
+    BNE SoundFinished
+
+    lda #0
+    sta AUDV1
+    sta AUDC1
+    sta AUDF1    
+
+SoundFinished
+    rts
+;Ch1Volume   .byte
+;Ch1Control  .byte
+;Ch1Feq      .byte
+;Ch1Duration .byte
 
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

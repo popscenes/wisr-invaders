@@ -178,14 +178,14 @@ NextFrame:
     jsr MoveMissiles
     jsr PlayChanel1Sound
     lda #<PinkOWLF0
-    sta P1SpritePtr         ; lo-byte pointer for jet sprite lookup table
+    sta P1SpritePtr         ; lo-byte pointer for sprite lookup table
     lda #>PinkOWLF0
-    sta P1SpritePtr+1       ; hi-byte pointer for jet sprite lookup table
+    sta P1SpritePtr+1       ; hi-byte pointer for  sprite lookup table
 
     lda #<PinkOWLF0
-    sta P2SpritePtr         ; lo-byte pointer for jet sprite lookup table
+    sta P2SpritePtr         ; lo-byte pointer for  sprite lookup table
     lda #>PinkOWLF0
-    sta P2SpritePtr+1       ; hi-byte pointer for jet sprite lookup table
+    sta P2SpritePtr+1       ; hi-byte pointer for  sprite lookup table
 
     lda CurrentMoveFrame
     beq MoveEvemy
